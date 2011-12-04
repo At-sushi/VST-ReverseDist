@@ -233,6 +233,23 @@ inline static __m128 reductSSE(__m128 source, __m128 str128)
 	return result;	// = (source > 0.0f) ? max(reducted, 0.0f) : min(reducted, 0.0f)
 }
 
+inline static __m128 rsqrt24(__m128 source)
+{
+	__m128 half = _mm_set1_ps(0.5), third = _mm_set1_ps(3.0),
+		rsqrt = _mm_rsqrt_ps(source);
+
+	return _mm_mul_ps(
+				_mm_mul_ps(half, rsqrt),
+				_mm_sub_ps(
+						third,
+						_mm_mul_ps(
+								_mm_mul_ps(source, rsqrt),
+								rsqrt
+						)
+				)
+			);
+}
+
 static void denoise(float strength, vcpx_vector& vpx1, vcpx_vector& vpx2)
 {
 	if (strength <= 0.0f)		// •ÏŠ·•s—v
@@ -270,7 +287,7 @@ static void denoiseSSE(float strength, vcpx_t* vpx1, vcpx_t* vpx2)
 			p1im = _mm_load_ps(vpx1->im);
 
 		// •¡‘f•½–Êã‚Ì’·‚³‚É‡‚í‚¹‚ÄŒ¸ŽZ
-		__m128 rlength1 = _mm_rsqrt_ps(
+		__m128 rlength1 = rsqrt24(
 							_mm_add_ps(_mm_mul_ps(p1re, p1re), _mm_mul_ps(p1im, p1im))
 						 );		// = 1 / sqrt(p1re * p1re + p1im * p1im)
 		_mm_store_ps(vpx1->re, reductSSE(p1re,
@@ -282,7 +299,7 @@ static void denoiseSSE(float strength, vcpx_t* vpx1, vcpx_t* vpx2)
 
 		__m128 p2re = _mm_load_ps(vpx2->re),
 			p2im = _mm_load_ps(vpx2->im);
-		__m128 rlength2 = _mm_rsqrt_ps(
+		__m128 rlength2 = rsqrt24(
 							_mm_add_ps(_mm_mul_ps(p2re, p2re), _mm_mul_ps(p2im, p2im))
 						 );		// = 1 / sqrt(p2re * p2re + p2im * p2im)
 		_mm_store_ps(vpx2->re, reductSSE(p2re,
