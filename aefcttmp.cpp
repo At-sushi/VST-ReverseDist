@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include <intrin.h>
 #include <xmmintrin.h>
+#define _USE_MATH_DEFINES
 #include <math.h>
 
 extern "C" {
@@ -331,32 +332,47 @@ void AReverseDist::processReplacing (float** inputs, float** outputs, VstInt32 s
 		int sf2 = sampleFrames;
 		ptmp1 = tmp1;
 		ptmp2 = tmp2;
+		double dc[2] = { 0, 0 };
 
 		for (int i = 0; i < FFTSIZE; i++)
 		{
+			static double phase[2] = { 0, 0 };
+
 			if (--sf2 >= 0)
 			{
 				if (fabs(*in1) > fThreshold * 0.005)
-					*ptmp1 = *in1 >= 0.0f ? *in1++ - fDistortion : *in1++ + fDistortion;
+				{
+					if (*in1 >= 0.0f)
+						PhaseMaker[0].MoveTo(-M_PI_2 / 4);
+					else
+						PhaseMaker[0].MoveTo(M_PI_2 / 4);
+				}
 				else
-					*ptmp1 = *in1++;
+					PhaseMaker[0].MoveTo(0);
+				*ptmp1 = *in1++ + PhaseMaker[0].Process() * fDistortion;
 				// フィードバック
-				*ptmp1 = PreSample[0] = *ptmp1 - PreSample[0] * fFeedback;
+				dc[0] += *ptmp1 = PreSample[0] = *ptmp1 - PreSample[0] * fFeedback;
 				ptmp1++;
 
 				if (fabs(*in2) > fThreshold * 0.005)
-					*ptmp2 = *in2 >= 0.0f ? *in2++ - fDistortion : *in2++ + fDistortion;
+				{
+					if (*in2 >= 0.0f)
+						PhaseMaker[1].MoveTo(-M_PI_2 / 4);
+					else
+						PhaseMaker[1].MoveTo(M_PI_2 / 4);
+				}
 				else
-					*ptmp2 = *in2++;
+					PhaseMaker[1].MoveTo(0);
+				*ptmp2 = *in2++ + PhaseMaker[1].Process() * fDistortion;
 				// フィードバック
-				*ptmp2 = PreSample[1] = *ptmp2 - PreSample[1] * fFeedback;
+				dc[1] += *ptmp2 = PreSample[1] = *ptmp2 - PreSample[1] * fFeedback;
 				ptmp2++;
 			}
 			else
 			{
-				// 前の値をコピー
-				*ptmp1++ = tmp1[i - 1];
-				*ptmp2++ = tmp2[i - 1];
+				// 直流成分をコピー
+				*ptmp1++ = dc[0] / sampleFrames;
+				*ptmp2++ = dc[1] / sampleFrames;
 			}
 		}
 

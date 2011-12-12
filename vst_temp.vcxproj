@@ -96,6 +96,7 @@
     <ClCompile Include="..\vstsdk2.4\public.sdk\source\vst2.x\audioeffect.cpp" />
     <ClCompile Include="..\vstsdk2.4\public.sdk\source\vst2.x\audioeffectx.cpp" />
     <ClCompile Include="..\vstsdk2.4\public.sdk\source\vst2.x\vstplugmain.cpp" />
+    <ClCompile Include="PhaseMaker.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="vstplug.def" />
@@ -109,6 +110,7 @@
     <ClInclude Include="..\vstsdk2.4\pluginterfaces\vst2.x\aeffect.h" />
     <ClInclude Include="..\vstsdk2.4\pluginterfaces\vst2.x\aeffectx.h" />
     <ClInclude Include="..\vstsdk2.4\pluginterfaces\vst2.x\vstfxstore.h" />
+    <ClInclude Include="PhaseMaker.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

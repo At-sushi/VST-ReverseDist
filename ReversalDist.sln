@@ -1,8 +1,20 @@
 Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual C++ Express 2010
+# Visual Studio 2010
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ReverseDist", "vst_temp.vcxproj", "{1705473E-CA26-4586-947C-94C3CCCD9844}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestProject1", "TestProject1\TestProject1.vcxproj", "{36AF76E3-B416-4FA0-A724-FAE351ECE85E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{A4416A75-F337-49E2-BF4B-C72854A04808}"
+	ProjectSection(SolutionItems) = preProject
+		Local.testsettings = Local.testsettings
+		ReversalDist.vsmdi = ReversalDist.vsmdi
+		TraceAndTestImpact.testsettings = TraceAndTestImpact.testsettings
+	EndProjectSection
+EndProject
 Global
+	GlobalSection(TestCaseManagementSettings) = postSolution
+		CategoryFile = ReversalDist.vsmdi
+	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
 		Release|Win32 = Release|Win32
@@ -12,6 +24,10 @@ Global
 		{1705473E-CA26-4586-947C-94C3CCCD9844}.Debug|Win32.Build.0 = Debug|Win32
 		{1705473E-CA26-4586-947C-94C3CCCD9844}.Release|Win32.ActiveCfg = Release|Win32
 		{1705473E-CA26-4586-947C-94C3CCCD9844}.Release|Win32.Build.0 = Release|Win32
+		{36AF76E3-B416-4FA0-A724-FAE351ECE85E}.Debug|Win32.ActiveCfg = Debug|Win32
+		{36AF76E3-B416-4FA0-A724-FAE351ECE85E}.Debug|Win32.Build.0 = Debug|Win32
+		{36AF76E3-B416-4FA0-A724-FAE351ECE85E}.Release|Win32.ActiveCfg = Release|Win32
+		{36AF76E3-B416-4FA0-A724-FAE351ECE85E}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

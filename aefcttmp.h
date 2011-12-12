@@ -1,5 +1,6 @@
 #pragma once
 #include "public.sdk\source\vst2.x\audioeffectx.h"
+#include "PhaseMaker.h"
 
 enum
 {
@@ -65,6 +66,7 @@ public:
 
 protected:
 	ARDistProgram programs[kNumPrograms];
+	CPhaseMaker PhaseMaker[2];
 	
 	float fGain;
 	float fDistortion;
