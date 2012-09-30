@@ -74,4 +74,5 @@ protected:
 	float fThreshold;
 	float fFeedback;
 	float PreSample[2];
+	double dFeedBack2;
 };

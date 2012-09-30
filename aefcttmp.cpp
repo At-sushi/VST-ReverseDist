@@ -115,7 +115,10 @@ void AReverseDist::setParameter (VstInt32 index, float value)
 	case kDistortion :	fDistortion = ap->fDistortion = value;	break;
 	case kDenoise :		fDenoise = ap->fDenoise = value;		break;
 	case kThreshold :	fThreshold = ap->fThreshold = value;	break;
-	case kFeedback :	fFeedback = ap->fFeedback = value;		break;
+	case kFeedback :	
+		fFeedback = ap->fFeedback = value;
+		dFeedBack2 = (1.0 - fFeedback) * exp(fFeedback);
+		break;
 	}
 }
 
@@ -154,7 +157,7 @@ void AReverseDist::getParameterDisplay (VstInt32 index, char *text)
 	{
 	case kGain :		dB2string(fGain, text, kVstMaxParamStrLen);					break;
 	case kDistortion :	float2string (fDistortion, text, kVstMaxParamStrLen);		break;
-	case kDenoise :		dB2string (fDenoise * 0.05f, text, kVstMaxParamStrLen);		break;
+	case kDenoise :		dB2string (fDenoise * 0.1f, text, kVstMaxParamStrLen);		break;
 	case kThreshold :	dB2string (fThreshold * 0.005f, text, kVstMaxParamStrLen);	break;
 	case kFeedback:		dB2string (fFeedback, text, kVstMaxParamStrLen);			break;
 	}
@@ -198,6 +201,8 @@ bool AReverseDist::getVendorString (char* text)
 //------------------------------------------------------------------------
 void AReverseDist::setSampleRate (float sampleRate)
 {
+	for (int i = 0; i < 2; i++)
+		PhaseMaker[i].OnSampleRateChanged((int)sampleRate);
 	AudioEffectX::setSampleRate (sampleRate);
 }
 
@@ -316,7 +321,7 @@ static void denoiseSSE(float strength, vcpx_t* vpx1, vcpx_t* vpx2)
 void AReverseDist::processReplacing (float** inputs, float** outputs, VstInt32 sampleFrames)
 {
 	// FFT_SSE用
-	_MM_ALIGN16 float tmp1[FFTSIZE],
+	static _MM_ALIGN16 float tmp1[FFTSIZE],			// static宣言はスタックオーバーフロー対策
 		  tmp2[FFTSIZE];
 
 	float *in1 = inputs[0],
@@ -332,12 +337,10 @@ void AReverseDist::processReplacing (float** inputs, float** outputs, VstInt32 s
 		int sf2 = sampleFrames;
 		ptmp1 = tmp1;
 		ptmp2 = tmp2;
-		double dc[2] = { 0, 0 };
+		double sum[2] = { 0, 0 };
 
 		for (int i = 0; i < FFTSIZE; i++)
 		{
-			static double phase[2] = { 0, 0 };
-
 			if (--sf2 >= 0)
 			{
 				if (fabs(*in1) > fThreshold * 0.005)
@@ -351,7 +354,7 @@ void AReverseDist::processReplacing (float** inputs, float** outputs, VstInt32 s
 					PhaseMaker[0].MoveTo(0);
 				*ptmp1 = *in1++ + PhaseMaker[0].Process() * fDistortion;
 				// フィードバック
-				dc[0] += *ptmp1 = PreSample[0] = *ptmp1 - PreSample[0] * fFeedback;
+				sum[0] += *ptmp1 = PreSample[0] = *ptmp1 * dFeedBack2 - PreSample[0] * fFeedback;
 				ptmp1++;
 
 				if (fabs(*in2) > fThreshold * 0.005)
@@ -365,26 +368,26 @@ void AReverseDist::processReplacing (float** inputs, float** outputs, VstInt32 s
 					PhaseMaker[1].MoveTo(0);
 				*ptmp2 = *in2++ + PhaseMaker[1].Process() * fDistortion;
 				// フィードバック
-				dc[1] += *ptmp2 = PreSample[1] = *ptmp2 - PreSample[1] * fFeedback;
+				sum[1] += *ptmp2 = PreSample[1] = *ptmp2 * dFeedBack2 - PreSample[1] * fFeedback;
 				ptmp2++;
 			}
 			else
 			{
 				// 直流成分をコピー
-				*ptmp1++ = dc[0] / sampleFrames;
-				*ptmp2++ = dc[1] / sampleFrames;
+				*ptmp1++ = sum[0] / sampleFrames;
+				*ptmp2++ = sum[1] / sampleFrames;
 			}
 		}
 
 		if (fDenoise > 0.0f)
 		{
-			_MM_ALIGN16 vcpx_vector vpx1, vpx2;
+			static _MM_ALIGN16 vcpx_vector vpx1, vpx2;
 
 			// FFT変換
 			ffft(tmp1, vpx1);
 			ffft(tmp2, vpx2);
 			// ノイズ削減処理
-			denoiseSSE(fDenoise * 0.05f, vpx1, vpx2);
+			denoiseSSE(fDenoise * 0.1f, vpx1, vpx2);
 			// 逆変換
 			frfft(vpx1, tmp1);
 			frfft(vpx2, tmp2);
