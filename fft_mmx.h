@@ -2,7 +2,7 @@
 #define _QCC_TEST_FFT_H
 
 #ifndef LOG2SIZE
-#define LOG2SIZE 10	// only even number is allowed. 
+#define LOG2SIZE 12	// only even number is allowed. 
 #endif
 #define FFTSIZE (1<<LOG2SIZE)
 #define SQRTSIZE (1<<(LOG2SIZE/2))

@@ -12,7 +12,6 @@ enum
 	kDistortion,
 	kDenoise,
 	kThreshold,
-	kFeedback,
 
 	kNumParams
 };
@@ -29,7 +28,6 @@ private:
 	float fDistortion;
 	float fDenoise;
 	float fThreshold;
-	float fFeedback;
 	char name[24];
 };
 
@@ -65,14 +63,15 @@ public:
 	virtual VstInt32 getVendorVersion () { return 1000; }
 
 protected:
+	void processDistortion(float* in1, float* ptmp1, int channel);
+	
 	ARDistProgram programs[kNumPrograms];
 	CPhaseMaker PhaseMaker[2];
+	std::vector<double> hannWindow;
+	std::vector<float> halfWindow[2], endWindow[2];
 	
 	float fGain;
 	float fDistortion;
 	float fDenoise;
 	float fThreshold;
-	float fFeedback;
-	float PreSample[2];
-	double dFeedBack2;
 };

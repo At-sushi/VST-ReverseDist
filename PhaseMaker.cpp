@@ -4,7 +4,7 @@
 
 CPhaseMaker::CPhaseMaker(void)
 {
-	lastValue = 0;
+	Reset();
 
 	SinCache.resize(4);
 	for (int i = 0; i < 4; i++)
@@ -17,8 +17,9 @@ CPhaseMaker::~CPhaseMaker(void)
 }
 
 
-void CPhaseMaker::OnSampleRateChanged(void)
+void CPhaseMaker::OnSampleRateChanged(float sampleRate)
 {
+	Reset();
 }
 
 

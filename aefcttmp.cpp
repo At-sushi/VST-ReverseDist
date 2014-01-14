@@ -6,6 +6,7 @@
 #include <xmmintrin.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include <assert.h>
 
 extern "C" {
 #include "fft_mmx.h"
@@ -14,7 +15,7 @@ extern "C" {
 
 ARDistProgram::ARDistProgram()
 {
-	fGain = fDistortion = fDenoise = fThreshold = fFeedback = 0.5f;
+	fGain = fDistortion = fDenoise = fThreshold = 0.5f;
 
 	name[0] = '\0';		// 暫定
 }
@@ -60,7 +61,8 @@ AReverseDist::~AReverseDist(void)
 //------------------------------------------------------------------------
 void AReverseDist::resume ()
 {
-	PreSample[0] = PreSample[1] = 0.f;
+	for (int i = 0; i < 2; i++)
+		PhaseMaker[i].Reset();
 
 	AudioEffectX::resume ();
 }
@@ -75,7 +77,6 @@ void AReverseDist::setProgram (VstInt32 program)
 	setParameter (kDistortion, ap->fDistortion);
 	setParameter (kDenoise, ap->fDenoise);
 	setParameter (kThreshold, ap->fThreshold);
-	setParameter (kFeedback, ap->fFeedback);
 }
 
 //------------------------------------------------------------------------
@@ -115,10 +116,6 @@ void AReverseDist::setParameter (VstInt32 index, float value)
 	case kDistortion :	fDistortion = ap->fDistortion = value;	break;
 	case kDenoise :		fDenoise = ap->fDenoise = value;		break;
 	case kThreshold :	fThreshold = ap->fThreshold = value;	break;
-	case kFeedback :	
-		fFeedback = ap->fFeedback = value;
-		dFeedBack2 = (1.0 - fFeedback) * exp(fFeedback);
-		break;
 	}
 }
 
@@ -131,7 +128,6 @@ float AReverseDist::getParameter (VstInt32 index)
 	case kDistortion :	return fDistortion;
 	case kDenoise :		return fDenoise;
 	case kThreshold :	return fThreshold;
-	case kFeedback :	return fFeedback;
 	}
 	
 	return 0;
@@ -146,7 +142,6 @@ void AReverseDist::getParameterName (VstInt32 index, char *label)
 	case kDistortion :	strcpy (label, "Distortion");	break;
 	case kDenoise :		strcpy (label, "Denoise");		break;
 	case kThreshold :	strcpy (label, "Threshold");	break;
-	case kFeedback :	strcpy (label, "Feedback");		break;
 	}
 }
 
@@ -159,7 +154,6 @@ void AReverseDist::getParameterDisplay (VstInt32 index, char *text)
 	case kDistortion :	float2string (fDistortion, text, kVstMaxParamStrLen);		break;
 	case kDenoise :		dB2string (fDenoise * 0.1f, text, kVstMaxParamStrLen);		break;
 	case kThreshold :	dB2string (fThreshold * 0.005f, text, kVstMaxParamStrLen);	break;
-	case kFeedback:		dB2string (fFeedback, text, kVstMaxParamStrLen);			break;
 	}
 	;
 }
@@ -172,7 +166,6 @@ void AReverseDist::getParameterLabel (VstInt32 index, char *label)
 	case kGain :	strcpy (label, "dB");	break;
 	case kDenoise :	strcpy (label, "dB");	break;
 	case kThreshold :strcpy (label, "dB");	break;
-	case kFeedback :strcpy (label, "dB");	break;
 	}
 	;
 }
@@ -202,14 +195,34 @@ bool AReverseDist::getVendorString (char* text)
 void AReverseDist::setSampleRate (float sampleRate)
 {
 	for (int i = 0; i < 2; i++)
-		PhaseMaker[i].OnSampleRateChanged((int)sampleRate);
+		PhaseMaker[i].OnSampleRateChanged(sampleRate);
 	AudioEffectX::setSampleRate (sampleRate);
 }
 
 //------------------------------------------------------------------------
 void AReverseDist::setBlockSize (VstInt32 blockSize)
 {
-	AudioEffectX::setBlockSize (blockSize);
+	// hann窓初期化
+	int blockSize2 = blockSize * 2;
+	int divide = (int)ceil((double)blockSize2 / (double)FFTSIZE);
+
+	while (blockSize2 % divide != 0) divide++;
+	int windowSize = blockSize2 / divide;
+
+	assert (windowSize <= FFTSIZE);
+	hannWindow.resize(windowSize);
+	for (int i = 0; i < windowSize; i++)
+		hannWindow[i] = 0.5 - 0.5 * cos(2.0 * M_PI * i / windowSize);
+	halfWindow[0].clear();
+	halfWindow[0].resize(windowSize / 2, 0.0f);
+	halfWindow[1].clear();
+	halfWindow[1].resize(windowSize / 2, 0.0f);
+	endWindow[0].clear();
+	endWindow[0].resize(windowSize / 2, 0.0f);
+	endWindow[1].clear();
+	endWindow[1].resize(windowSize / 2, 0.0f);
+	setInitialDelay(windowSize / 2);
+	AudioEffectX::setBlockSize (windowSize);
 }
 
 //---------------------------------------------------------------------------
@@ -317,6 +330,23 @@ static void denoiseSSE(float strength, vcpx_t* vpx1, vcpx_t* vpx2)
 	}
 }
 
+void AReverseDist::processDistortion(float* in1, float* ptmp1, int channel)
+{
+	assert(channel == 0 || channel == 1);
+
+	if (fabs(*in1) > fThreshold * 0.005)
+	{
+		if (*in1 >= 0.0f)
+			PhaseMaker[channel].MoveTo(-M_PI_2 / 4);
+		else
+			PhaseMaker[channel].MoveTo(M_PI_2 / 4);
+	}
+	else
+		PhaseMaker[channel].MoveTo(0);
+
+	*ptmp1 = *in1 + PhaseMaker[channel].Process() * fDistortion;
+}
+
 //---------------------------------------------------------------------------
 void AReverseDist::processReplacing (float** inputs, float** outputs, VstInt32 sampleFrames)
 {
@@ -335,50 +365,35 @@ void AReverseDist::processReplacing (float** inputs, float** outputs, VstInt32 s
 	{
 		// Distortion処理
 		int sf2 = sampleFrames;
+		int hannnum = (int)hannWindow.size() / 2;
+		assert(min(sf2, FFTSIZE / 2) >= hannnum);
 		ptmp1 = tmp1;
 		ptmp2 = tmp2;
-		double sum[2] = { 0, 0 };
-
-		for (int i = 0; i < FFTSIZE; i++)
+		for (int i = 0; i < hannnum; i++)
 		{
-			if (--sf2 >= 0)
-			{
-				if (fabs(*in1) > fThreshold * 0.005)
-				{
-					if (*in1 >= 0.0f)
-						PhaseMaker[0].MoveTo(-M_PI_2 / 4);
-					else
-						PhaseMaker[0].MoveTo(M_PI_2 / 4);
-				}
-				else
-					PhaseMaker[0].MoveTo(0);
-				*ptmp1 = *in1++ + PhaseMaker[0].Process() * fDistortion;
-				// フィードバック
-				sum[0] += *ptmp1 = PreSample[0] = *ptmp1 * dFeedBack2 - PreSample[0] * fFeedback;
-				ptmp1++;
+			*ptmp1++ = endWindow[0][i] * hannWindow[i];
+			*ptmp2++ = endWindow[1][i] * hannWindow[i];
+		}
 
-				if (fabs(*in2) > fThreshold * 0.005)
-				{
-					if (*in2 >= 0.0f)
-						PhaseMaker[1].MoveTo(-M_PI_2 / 4);
-					else
-						PhaseMaker[1].MoveTo(M_PI_2 / 4);
-				}
-				else
-					PhaseMaker[1].MoveTo(0);
-				*ptmp2 = *in2++ + PhaseMaker[1].Process() * fDistortion;
-				// フィードバック
-				sum[1] += *ptmp2 = PreSample[1] = *ptmp2 * dFeedBack2 - PreSample[1] * fFeedback;
-				ptmp2++;
+		for (int i = 0; i < FFTSIZE / 2; i++)
+		{
+			if (--sf2 >= 0 && hannnum < (int)hannWindow.size())
+			{
+				processDistortion(in1++, ptmp1, 0);
+				endWindow[0][i] = *ptmp1;
+				*ptmp1++ *= hannWindow[hannnum];
+
+				processDistortion(in2++, ptmp2, 1);
+				endWindow[1][i] = *ptmp2;
+				*ptmp2++ *= hannWindow[hannnum++];
 			}
 			else
 			{
-				// 直流成分をコピー
-				*ptmp1++ = sum[0] / sampleFrames;
-				*ptmp2++ = sum[1] / sampleFrames;
+				// ぜろー
+				*ptmp1++ = 0;
+				*ptmp2++ = 0;
 			}
 		}
-
 		if (fDenoise > 0.0f)
 		{
 			static _MM_ALIGN16 vcpx_vector vpx1, vpx2;
@@ -393,7 +408,8 @@ void AReverseDist::processReplacing (float** inputs, float** outputs, VstInt32 s
 			frfft(vpx2, tmp2);
 		}
 
-		int fftLimit = FFTSIZE;
+		int fftLimit = hannnum / 2;
+		std::vector<float>::iterator ihalf1 = halfWindow[0].begin(), ihalf2 = halfWindow[1].begin();
 		ptmp1 = tmp1;
 		ptmp2 = tmp2;
 
@@ -401,8 +417,11 @@ void AReverseDist::processReplacing (float** inputs, float** outputs, VstInt32 s
 		while (--fftLimit >= 0 &&
 				--sampleFrames >= 0)
 		{
-			*out1++ = *ptmp1++ * fGain;
-			*out2++ = *ptmp2++ * fGain;
+			*out1++ = ((*ptmp1++) + (*ihalf1++)) * fGain;
+			*out2++ = ((*ptmp2++) + (*ihalf2++)) * fGain;
 		}
+		assert(ihalf1 == halfWindow[0].end() && ihalf2 == halfWindow[1].end());
+		memcpy(&halfWindow[0][0], tmp1 + (int)halfWindow[0].size(), (int)(halfWindow[0].size() * sizeof(float)));
+		memcpy(&halfWindow[1][0], tmp2 + (int)halfWindow[1].size(), (int)(halfWindow[1].size() * sizeof(float)));
 	}
 }
