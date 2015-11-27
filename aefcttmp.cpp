@@ -203,11 +203,10 @@ void AReverseDist::setSampleRate (float sampleRate)
 void AReverseDist::setBlockSize (VstInt32 blockSize)
 {
 	// hannëãèâä˙âª
-	int blockSize2 = blockSize * 2;
-	int divide = (int)ceil((double)blockSize2 / (double)FFTSIZE);
+	int divide = (int)ceil((double)blockSize * 2 / (double)FFTSIZE);
 
-	while (blockSize2 % divide != 0) divide++;
-	int windowSize = blockSize2 / divide;
+	while (blockSize % divide != 0 && divide < blockSize) divide++;
+	const int windowSize = blockSize / divide * 2;
 
 	assert (windowSize <= FFTSIZE);
 	hannWindow.resize(windowSize);

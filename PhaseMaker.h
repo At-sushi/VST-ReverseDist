@@ -28,7 +28,10 @@ public:
 	void OnSampleRateChanged(float sampleRate);
 	double Process(void);
 
-	void Reset()	{ lastValue = 0; }
+	void Reset()	{
+		lastValue = 0;
+		MovingState.clear();
+	}
 
 private:
 	std::deque<PHASING> MovingState;
