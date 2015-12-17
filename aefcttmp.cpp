@@ -205,11 +205,12 @@ void AReverseDist::setBlockSize (VstInt32 blockSize)
 	// hann‘‹‰Šú‰»
 	int divide = (int)ceil((double)blockSize * 2 / (double)FFTSIZE);
 
-	while (blockSize % divide != 0 && divide < blockSize) divide++;
+	while (blockSize % divide != 0 && divide * 2 <= blockSize) divide++;
 	const int windowSize = blockSize / divide * 2;
 
 	assert (windowSize <= FFTSIZE);
 	hannWindow.resize(windowSize);
+
 	for (int i = 0; i < windowSize; i++)
 		hannWindow[i] = 0.5 - 0.5 * cos(2.0 * M_PI * i / windowSize);
 	halfWindow[0].clear();
