@@ -7,6 +7,10 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include <assert.h>
+#include <boost/range/irange.hpp>
+#include <boost/range/join.hpp>
+#include <boost/range/adaptor/transformed.hpp>
+#include <functional>
 
 extern "C" {
 #include "fft_mmx.h"
@@ -202,11 +206,24 @@ void AReverseDist::setSampleRate (float sampleRate)
 //------------------------------------------------------------------------
 void AReverseDist::setBlockSize (VstInt32 blockSize)
 {
+	// BlockSize‚©‚çleastˆÈã‚ÌÅ¬–ñ”‚ğŒŸ’m
+	auto getDivisor = [](int blockSize, int least)
+	{
+		const std::function<int(int)> invert = [blockSize](int x){ return blockSize / x; };		// blockSize‚É‘Î‚µ‚Ä‚Ì‹t”
+
+		const auto range = boost::join(boost::irange(least, (int)sqrtf(blockSize) + 1),
+			boost::irange(least - 1, 0, -1) | boost::adaptors::transformed(invert));			// –ñ”ŒŸ’m‚·‚é”ÍˆÍ
+		for (int i : range)
+			if (blockSize % i == 0)
+				return i;
+
+		throw;
+	};
+
 	// hann‘‹‰Šú‰»
 	int divide = (int)ceil((double)blockSize * 2 / (double)FFTSIZE);
 
-	while (blockSize % divide != 0 && divide * 2 <= blockSize) divide++;
-	const int windowSize = blockSize / divide * 2;
+	const int windowSize = blockSize / getDivisor(blockSize, divide) * 2;
 
 	assert (windowSize <= FFTSIZE);
 	hannWindow.resize(windowSize);
